@@ -1,0 +1,27 @@
+# 测试与临时文件
+_extract_pdf.py
+_gen_data.py
+_git_prep.py
+_git_clean.py
+_git_push.py
+_git_init.py
+*.tmp
+
+# IDE / 工具
+.codebuddy/
+.playwright-cli/
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# 浏览器临时截图
+top.png
+mid1.png
+mid2.png
+bottom.png
+pos.png
+max.png
+filter_max.png
+filter_core.png
+concl.png

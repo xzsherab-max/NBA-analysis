@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NBA 薪资效率洞察 · 2024-25 赛季交互式数据看板</title>
+<meta name="description" content="钱付给了谁？—— NBA球员薪资与表现的错位分析。基于 Task 7 数据分析报告的交互式看板，支持悬停、缩放、筛选与排序。">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+<script src="data.js"></script>
+<style>
+  :root{
+    --bg:#0a0f1e; --bg2:#0d1428; --card:#111a2e; --card2:#16203a; --line:#1f2c4a;
+    --txt:#e7eefb; --sub:#93a7c4; --muted:#5f7595;
+    --orange:#ff8a3d; --orange2:#f97316; --blue:#38bdf8; --green:#34d399;
+    --red:#f87171; --amber:#fbbf24; --purple:#a78bfa;
+    --radius:16px; --shadow:0 10px 34px rgba(0,0,0,.35);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    background:
+      radial-gradient(1100px 500px at 85% -10%, rgba(249,115,22,.10), transparent 60%),
+      radial-gradient(900px 480px at -10% 15%, rgba(56,189,248,.09), transparent 55%),
+      var(--bg);
+    color:var(--txt);
+    font-family:"Inter","PingFang SC","Microsoft YaHei",-apple-system,"Segoe UI",sans-serif;
+    line-height:1.65; -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:rgba(249,115,22,.35)}
+  .container{max-width:1240px;margin:0 auto;padding:0 22px}
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ---------- 顶部导航 ---------- */
+  header.nav{
+    position:sticky;top:0;z-index:100;
+    background:rgba(10,15,30,.82);backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--line);
+  }
+  .nav-inner{display:flex;align-items:center;gap:18px;height:60px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:16px;white-space:nowrap}
+  .brand .logo{
+    width:34px;height:34px;border-radius:10px;flex:none;
+    background:linear-gradient(135deg,var(--orange2),#c2410c);
+    display:grid;place-items:center;box-shadow:0 4px 14px rgba(249,115,22,.4);
+  }
+  .brand .logo svg{width:20px;height:20px;stroke:#fff}
+  .brand small{display:block;font-size:11px;color:var(--sub);font-weight:500;letter-spacing:.4px}
+  nav.links{margin-left:auto;display:flex;gap:4px;flex-wrap:wrap}
+  nav.links a{
+    color:var(--sub);font-size:13px;padding:6px 10px;border-radius:8px;transition:.2s;white-space:nowrap
+  }
+  nav.links a:hover{color:var(--txt);background:rgba(255,255,255,.06);text-decoration:none}
+  nav.links a.active{color:var(--orange);background:rgba(249,115,22,.12)}
+
+  /* ---------- Hero ---------- */
+  .hero{padding:64px 0 40px;position:relative}
+  .hero .tag{
+    display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;
+    color:var(--orange);background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);
+    padding:6px 14px;border-radius:999px;letter-spacing:.6px;margin-bottom:20px;
+  }
+  .hero h1{font-size:clamp(30px,5vw,50px);line-height:1.18;font-weight:900;letter-spacing:-.5px}
+  .hero h1 .grad{background:linear-gradient(90deg,var(--orange),var(--amber));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p.lead{max-width:780px;color:var(--sub);font-size:16.5px;margin-top:18px}
+  .hero .meta{display:flex;flex-wrap:wrap;gap:14px;margin-top:22px;color:var(--muted);font-size:13px}
+  .hero .meta span{display:inline-flex;align-items:center;gap:6px}
+  .hero .meta svg{width:15px;height:15px;stroke:var(--orange2)}
+
+  /* ---------- KPI 卡片 ---------- */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:38px}
+  .kpi{
+    background:linear-gradient(180deg,var(--card),var(--bg2));border:1px solid var(--line);
+    border-radius:var(--radius);padding:20px 20px 16px;position:relative;overflow:hidden;
+    transition:.25s;box-shadow:var(--shadow);
+  }
+  .kpi:hover{transform:translateY(-3px);border-color:rgba(249,115,22,.45)}
+  .kpi::after{
+    content:"";position:absolute;right:-30px;top:-30px;width:90px;height:90px;border-radius:50%;
+    background:radial-gradient(circle,rgba(249,115,22,.18),transparent 70%);
+  }
+  .kpi .k-label{font-size:12.5px;color:var(--sub);letter-spacing:.4px;display:flex;align-items:center;gap:7px}
+  .kpi .k-label svg{width:15px;height:15px;stroke:var(--orange2)}
+  .kpi .k-value{font-size:30px;font-weight:900;margin-top:8px;font-variant-numeric:tabular-nums}
+  .kpi .k-value small{font-size:14px;color:var(--sub);font-weight:600}
+  .kpi .k-note{font-size:12px;color:var(--muted);margin-top:6px}
+
+  /* ---------- 章节 ---------- */
+  section.block{padding:44px 0 10px}
+  .sec-head{display:flex;align-items:flex-start;gap:16px;margin-bottom:22px}
+  .sec-num{
+    font-size:13px;font-weight:800;letter-spacing:2px;color:var(--orange2);
+    background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.28);
+    padding:6px 12px;border-radius:10px;flex:none;margin-top:4px;
+  }
+  .sec-head h2{font-size:clamp(22px,3.4vw,30px);font-weight:800;letter-spacing:-.3px}
+  .sec-head .sub{color:var(--sub);font-size:14.5px;margin-top:6px;max-width:860px}
+  .sec-head .sub b{color:var(--txt)}
+
+  /* ---------- 卡片布局 ---------- */
+  .card{
+    background:linear-gradient(180deg,var(--card),var(--bg2));border:1px solid var(--line);
+    border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;margin-bottom:24px;
+  }
+  .card .chart-title{font-size:15px;font-weight:700;margin-bottom:2px;display:flex;align-items:center;gap:9px}
+  .card .chart-title .dot{width:9px;height:9px;border-radius:50%;flex:none}
+  .card .chart-sub{color:var(--sub);font-size:12.8px;margin-bottom:12px}
+  .split{display:grid;grid-template-columns:1.25fr .95fr;gap:20px}
+  .split.rev{grid-template-columns:.95fr 1.25fr}
+  .chart{width:100%}
+
+  /* ---------- 洞察卡片 ---------- */
+  .insight{
+    background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:18px;
+    display:flex;flex-direction:column;gap:12px;
+  }
+  .insight .i-title{font-size:13px;font-weight:800;color:var(--orange);letter-spacing:.5px;display:flex;align-items:center;gap:8px}
+  .insight .i-title svg{width:16px;height:16px;stroke:var(--orange)}
+  .insight p{color:var(--sub);font-size:13.8px}
+  .insight p b{color:var(--txt)}
+  .insight .stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:auto}
+  .stat{
+    background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:10px;padding:11px 12px;
+  }
+  .stat .s-v{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
+  .stat .s-l{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .stat.green .s-v{color:var(--green)} .stat.red .s-v{color:var(--red)} .stat.blue .s-v{color:var(--blue)}
+  .stat.orange .s-v{color:var(--orange)}
+
+  /* ---------- 筛选栏 ---------- */
+  .filters{
+    position:sticky;top:60px;z-index:90;margin:26px 0 4px;
+    background:rgba(13,20,40,.9);backdrop-filter:blur(12px);
+    border:1px solid var(--line);border-radius:14px;padding:14px 16px;
+    display:flex;flex-wrap:wrap;align-items:center;gap:14px;box-shadow:var(--shadow);
+  }
+  .filters .f-group{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .filters .f-label{font-size:12.5px;color:var(--muted);font-weight:600;letter-spacing:.4px}
+  .chip{
+    font-size:12.5px;font-weight:600;color:var(--sub);cursor:pointer;
+    padding:6px 13px;border-radius:999px;border:1px solid var(--line);
+    background:transparent;transition:.18s;font-family:inherit;
+  }
+  .chip:hover{color:var(--txt);border-color:var(--orange2)}
+  .chip.on{color:#fff;background:linear-gradient(135deg,var(--orange2),#c2410c);border-color:var(--orange2);box-shadow:0 3px 10px rgba(249,115,22,.35)}
+  .filters .f-count{margin-left:auto;font-size:12.5px;color:var(--sub);font-variant-numeric:tabular-nums}
+  .filters .f-count b{color:var(--orange)}
+
+  /* ---------- 表格 ---------- */
+  .table-wrap{margin-top:8px;overflow:auto;max-height:520px;border:1px solid var(--line);border-radius:12px}
+  table{width:100%;border-collapse:collapse;font-size:13px;min-width:820px}
+  thead th{
+    position:sticky;top:0;background:var(--card2);color:var(--sub);font-size:12px;letter-spacing:.4px;
+    padding:11px 12px;text-align:right;cursor:pointer;user-select:none;white-space:nowrap;z-index:2;
+    border-bottom:1px solid var(--line);
+  }
+  thead th:hover{color:var(--orange)}
+  thead th .arr{font-size:9px;color:var(--orange2)}
+  tbody td{padding:9px 12px;text-align:right;border-bottom:1px solid rgba(31,44,74,.55);white-space:nowrap;font-variant-numeric:tabular-nums}
+  tbody tr:hover{background:rgba(249,115,22,.06)}
+  tbody td.l{text-align:left}
+  td .pname{font-weight:600;color:var(--txt)}
+  td .pos-tag{
+    display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:6px;margin-left:7px;
+  }
+  .pos-tag.PG{color:#38bdf8;background:rgba(56,189,248,.12)}
+  .pos-tag.SG{color:#a78bfa;background:rgba(167,139,250,.12)}
+  .pos-tag.SF{color:#34d399;background:rgba(52,211,153,.12)}
+  .pos-tag.PF{color:#fbbf24;background:rgba(251,191,36,.12)}
+  .pos-tag.C{color:#f87171;background:rgba(248,113,113,.12)}
+  .dev-pos{color:var(--green);font-weight:700}
+  .dev-neg{color:var(--red);font-weight:700}
+  .dev-0{color:var(--muted)}
+  .rook-y{color:var(--amber);font-weight:700}
+  .rook-n{color:var(--muted)}
+  .searchbar{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .searchbar svg{width:16px;height:16px;stroke:var(--muted)}
+  .searchbar input{
+    background:var(--bg2);border:1px solid var(--line);color:var(--txt);border-radius:9px;
+    padding:9px 14px;font-size:13.5px;width:260px;outline:none;font-family:inherit;transition:.2s;
+  }
+  .searchbar input:focus{border-color:var(--orange2)}
+  .searchbar .hint{margin-left:auto;font-size:12px;color:var(--muted)}
+
+  /* ---------- 结论 ---------- */
+  .concl-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .concl{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px;
+    position:relative;overflow:hidden;transition:.25s;box-shadow:var(--shadow);
+  }
+  .concl:hover{transform:translateY(-3px);border-color:rgba(56,189,248,.4)}
+  .concl .c-num{position:absolute;right:14px;top:6px;font-size:44px;font-weight:900;color:rgba(255,255,255,.05)}
+  .concl .c-ic{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;margin-bottom:13px}
+  .concl .c-ic svg{width:21px;height:21px}
+  .concl h3{font-size:16px;font-weight:800;margin-bottom:8px}
+  .concl p{color:var(--sub);font-size:13.6px}
+  .ic-orange{background:rgba(249,115,22,.14);color:var(--orange)}
+  .ic-green{background:rgba(52,211,153,.14);color:var(--green)}
+  .ic-blue{background:rgba(56,189,248,.14);color:var(--blue)}
+
+  /* ---------- 页脚 ---------- */
+  footer{border-top:1px solid var(--line);margin-top:60px;padding:34px 0 46px;color:var(--muted);font-size:13px}
+  footer .container{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between}
+  footer .gh{display:inline-flex;align-items:center;gap:8px;color:var(--sub)}
+  footer .gh svg{width:17px;height:17px}
+
+  /* ---------- 返回顶部 ---------- */
+  #toTop{
+    position:fixed;right:22px;bottom:26px;z-index:99;width:46px;height:46px;border-radius:13px;
+    background:linear-gradient(135deg,var(--orange2),#c2410c);border:none;cursor:pointer;
+    display:grid;place-items:center;opacity:0;pointer-events:none;transition:.25s;
+    box-shadow:0 8px 22px rgba(249,115,22,.4);
+  }
+  #toTop.show{opacity:1;pointer-events:auto}
+  #toTop svg{width:20px;height:20px;stroke:#fff}
+
+  /* ---------- 响应式 ---------- */
+  @media(max-width:960px){
+    .split,.split.rev{grid-template-columns:1fr}
+    .kpis{grid-template-columns:repeat(2,1fr)}
+    .concl-grid{grid-template-columns:1fr}
+    nav.links{display:none}
+  }
+  @media(max-width:520px){
+    .kpis{grid-template-columns:1fr 1fr;gap:10px}
+    .kpi .k-value{font-size:24px}
+    .filters{top:54px}
+  }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="container nav-inner">
+    <div class="brand">
+      <span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/><circle cx="12" cy="12" r="4.5"/></svg></span>
+      <span>NBA 薪资效率洞察<small>NBA Salary &amp; Performance Insights · 2024-25</small></span>
+    </div>
+    <nav class="links" id="navLinks">
+      <a href="#overview" class="active">概览</a>
+      <a href="#dist">薪资分布</a>
+      <a href="#corr">相关性</a>
+      <a href="#rookie">新秀红利</a>
+      <a href="#value">性价比榜单</a>
+      <a href="#pos">位置分析</a>
+      <a href="#max">顶薪错位</a>
+      <a href="#concl">结论建议</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero container" id="overview">
+  <span class="tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>TASK 7 · 数据分析报告 · 交互式看板</span>
+  <h1>钱付给了谁？<br>NBA 球员薪资与表现的<span class="grad">错位分析</span></h1>
+  <p class="lead">以 2024-25 赛季 325 名稳定轮换球员为样本，回答三个问题：薪资到底由什么决定？哪些球员被严重高估或低估？位置与顶薪合同是否存在结构性错配？—— 所有图表均支持 <b style="color:var(--txt)">悬停、缩放、框选</b>，并可用下方筛选器联动探索。</p>
+  <div class="meta">
+    <span><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>数据期间：2024-25 常规赛</span>
+    <span><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>样本：325 名主要轮换球员</span>
+    <span><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>方法：描述统计 · 相关分析 · OLS 回归 · 非参数检验</span>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi">
+      <div class="k-label"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>样本规模</div>
+      <div class="k-value">325<small> 名球员</small></div>
+      <div class="k-note">2024-25 赛季稳定轮换样本</div>
+    </div>
+    <div class="kpi">
+      <div class="k-label"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>薪资中位数</div>
+      <div class="k-value">$8.0<small> 百万</small></div>
+      <div class="k-note">中位球员年薪约 800 万美元</div>
+    </div>
+    <div class="kpi">
+      <div class="k-label"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>薪资均值</div>
+      <div class="k-value">$13.0<small> 百万</small></div>
+      <div class="k-note">为中位数的 1.6 倍 —— 强右偏</div>
+    </div>
+    <div class="kpi">
+      <div class="k-label"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>分布偏度</div>
+      <div class="k-value">1.38<small> 右偏</small></div>
+      <div class="k-note">少数顶薪球员拉高整体水平</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 全局筛选 ============ -->
+<div class="container">
+  <div class="filters" id="filterBar">
+    <div class="f-group">
+      <span class="f-label">位置</span>
+      <button class="chip on" data-pos="ALL">全部</button>
+      <button class="chip" data-pos="PG">PG</button>
+      <button class="chip" data-pos="SG">SG</button>
+      <button class="chip" data-pos="SF">SF</button>
+      <button class="chip" data-pos="PF">PF</button>
+      <button class="chip" data-pos="C">C</button>
+    </div>
+    <div class="f-group">
+      <span class="f-label">合同类型</span>
+      <button class="chip on" data-type="ALL">全部</button>
+      <button class="chip" data-type="MAX">顶薪（&gt;4,000万$）</button>
+      <button class="chip" data-type="ROOKIE">疑似新秀合同</button>
+      <button class="chip" data-type="CORE">主要轮换（MP≥20）</button>
+    </div>
+    <div class="f-count">当前范围：<b id="curCount">325</b> 名球员 · 薪资中位数 <b id="curMed">—</b>M</div>
+  </div>
+</div>
+
+<!-- ============ 发现 1：薪资分布 ============ -->
+<section class="block container" id="dist">
+  <div class="sec-head">
+    <div class="sec-num">01</div>
+    <div>
+      <h2>发现一：薪资分配严重右偏，均值被顶薪“平均”掉了</h2>
+      <div class="sub">中位数 800 万 vs 均值 1,303 万（1.6 倍），偏度 1.38。<b>悬停查看每个区间的球员数量，拖动框选可缩放区间。</b></div>
+    </div>
+  </div>
+  <div class="split">
+    <div class="card">
+      <div class="chart-title"><span class="dot" style="background:var(--orange)"></span>年薪分布直方图（单位：百万美元）</div>
+      <div class="chart-sub">橙色虚线为中位数 8.0M，白色虚线为均值 13.0M。超过 40M 的顶薪档球员单独高亮。</div>
+      <div class="chart" id="chart-dist" style="height:420px"></div>
+    </div>
+    <div>
+      <div class="insight" style="min-height:300px">
+        <div class="i-title"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h20"/><path d="M4 20V8l6 4 4-6 6 6"/></svg>核心洞察</div>
+        <p>薪资分布呈<b>强右偏</b>：不到三分之一的球员年薪超过千万，而约 8% 的球员（25 人）年薪超过 4,000 万美元。市场定价的核心是<b>得分产量与合同资历</b>，而非效率。</p>
+        <p>年薪 2,090 万美元的<span style="color:var(--orange)">Guerschon Yabusele</span>与 <span style="color:var(--orange)">Gary Trent Jr.</span> 正是右尾分布的受益者 / 受害者两极。</p>
+        <div class="stat-grid">
+          <div class="stat orange"><div class="s-v">$8.0M</div><div class="s-l">薪资中位数</div></div>
+          <div class="stat blue"><div class="s-v">$13.0M</div><div class="s-l">薪资均值</div></div>
+          <div class="stat red"><div class="s-v">25 人</div><div class="s-l">年薪 &gt; 4,000 万</div></div>
+          <div class="stat"><div class="s-v">1.38</div><div class="s-l">偏度（右偏）</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 发现 1b：相关性 ============ -->
+<section class="block container" id="corr">
+  <div class="sec-head">
+    <div class="sec-num">02</div>
+    <div>
+      <h2>发现二：薪资定价看“得分与资历”，效率几乎被无视</h2>
+      <div class="sub">对数薪资与各指标的 Pearson 相关：与 EFF（r=0.65）、场均时间（r=0.65）强相关，与真实命中率几乎无关（r=0.09）。<b>悬停色块查看精确相关系数。</b></div>
+    </div>
+  </div>
+  <div class="split rev">
+    <div>
+      <div class="insight" style="min-height:300px">
+        <div class="i-title"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l2.5 2.5"/></svg>核心洞察</div>
+        <p>决定薪资的第一要素是<b>累计数据（EFF）与出场时间（MP）</b>——能上场、能刷出基础数据就有钱；而衡量真实效率的 <b>WinScore/48（r=0.22）</b>与 <b>真实命中率（r=0.09）</b>与薪资几乎脱钩。</p>
+        <p>这意味着：<span style="color:var(--green)">低产高效的“性价比球员”</span>与<span style="color:var(--red)">高产低效的“数据刷子”</span>在市场中普遍存在，为发现三与发现五的错位埋下伏笔。</p>
+        <div class="stat-grid">
+          <div class="stat green"><div class="s-v">0.65</div><div class="s-l">r（ln薪资, EFF）</div></div>
+          <div class="stat green"><div class="s-v">0.65</div><div class="s-l">r（ln薪资, MP）</div></div>
+          <div class="stat red"><div class="s-v">0.09</div><div class="s-l">r（ln薪资, TS%）</div></div>
+          <div class="stat orange"><div class="s-v">0.22</div><div class="s-l">r（ln薪资, WS/48）</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="chart-title"><span class="dot" style="background:var(--blue)"></span>对数薪资 × 关键指标 相关系数热力图</div>
+      <div class="chart-sub">暖色=正相关，冷色=负相关。行/列均为同一指标，对角线为 1。</div>
+      <div class="chart" id="chart-corr" style="height:420px"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 发现 2：新秀红利 ============ -->
+<section class="block container" id="rookie">
+  <div class="sec-head">
+    <div class="sec-num">03</div>
+    <div>
+      <h2>发现三：新秀合同=“价格锁定”，性价比之王是制度的产物</h2>
+      <div class="sub">控制得分后，疑似新秀合同球员（橙色）的薪资比同等表现者<b>低约 59%</b>（回归系数 -0.899，p&lt;0.001）。<b>悬停查看球员详情，可缩放/框选局部比较两组拟合线。</b></div>
+    </div>
+  </div>
+  <div class="split">
+    <div class="card">
+      <div class="chart-title"><span class="dot" style="background:var(--amber)"></span>每 36 分钟得分 vs 对数薪资（按新秀合同着色）</div>
+      <div class="chart-sub">实线为两组线性拟合。相同得分水平下，新秀合同球员的对数薪资整体下移约 0.9。</div>
+      <div class="chart" id="chart-rookie" style="height:420px"></div>
+    </div>
+    <div>
+      <div class="insight" style="min-height:300px">
+        <div class="i-title"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3l4 8 5-5 5 15H2L8 3z"/></svg>核心洞察</div>
+        <p>同样的每 36 分钟得分，新秀合同球员薪资<b>平均低约 59%</b>。这不是他们实力不济，而是劳资协议下<b>新秀合同价格锁定</b>的结果。</p>
+        <p>对球队而言，新秀合同期内的<b>即战力</b>是最被低估的资产；对球员而言，新秀合同结束后将迎来市场价值的集中兑现。</p>
+        <div class="stat-grid">
+          <div class="stat red"><div class="s-v">-0.899</div><div class="s-l">新秀系数（p&lt;0.001）</div></div>
+          <div class="stat orange"><div class="s-v">≈ -59%</div><div class="s-l">同等表现薪资折价</div></div>
+          <div class="stat blue"><div class="s-v">125 人</div><div class="s-l">疑似新秀合同球员</div></div>
+          <div class="stat green"><div class="s-v">+0.099</div><div class="s-l">每36分钟得分系数</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 发现 3：性价比榜单 ============ -->
+<section class="block container" id="value">
+  <div class="sec-head">
+    <div class="sec-num">04</div>
+    <div>
+      <h2>发现四：同样的表现，价格可以差出 6 倍</h2>
+      <div class="sub">对 227 名主要轮换球员（MP≥20）做 OLS 回归残差分析，计算每位球员薪资相对市场模型的偏离度（dev%）。<b>绿色=被低估（性价比之王），红色=被高估。悬停查看详情。</b></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="chart-title"><span class="dot" style="background:var(--green)"></span>主要轮换球员 · 薪资偏离度 Top 8（低估） / Top 8（高估）</div>
+    <div class="chart-sub">偏离度 =（实际薪资 − 模型预测薪资）/ 模型预测薪资。模型包含 WinScore/48、PTS/36、年龄、新秀合同状态。</div>
+    <div class="chart" id="chart-value" style="height:500px"></div>
+  </div>
+  <div class="card">
+    <div class="chart-title"><span class="dot" style="background:var(--purple)"></span>球员明细表（可搜索 / 点击表头排序）</div>
+    <div class="chart-sub" style="margin-bottom:0">受全局筛选影响；“vs市场”仅对主要轮换球员计算。</div>
+    <div class="searchbar" style="margin-top:14px">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="tableSearch" placeholder="搜索球员姓名…">
+      <span class="hint">显示 <b id="tableCount">325</b> / 325 名球员</span>
+    </div>
+    <div class="table-wrap">
+      <table id="playerTable">
+        <thead><tr></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 发现 4：位置分析 ============ -->
+<section class="block container" id="pos">
+  <div class="sec-head">
+    <div class="sec-num">05</div>
+    <div>
+      <h2>发现五：位置溢价只是表象，中锋价值被结构性低估</h2>
+      <div class="sub">Kruskal-Wallis 检验仅边际显著（H=8.37, p=0.079）；控制新秀合同后位置差异几乎消失。而中锋的 <b>WinScore/48 中位数 18.55 为五位置最高</b>，薪资却仅居中游。<b>悬停箱线查看分布细节。</b></div>
+    </div>
+  </div>
+  <div class="split">
+    <div class="card">
+      <div class="chart-title"><span class="dot" style="background:var(--orange)"></span>各位置 · 年薪分布箱线图</div>
+      <div class="chart-sub">PG 薪资中位数最高（1,683 万），SG 最低（1,013 万）。</div>
+      <div class="chart" id="chart-pos-sal" style="height:360px"></div>
+    </div>
+    <div class="card">
+      <div class="chart-title"><span class="dot" style="background:var(--green)"></span>各位置 · 单位时间效率（WinScore/48）箱线图</div>
+      <div class="chart-sub">C 中位数 18.55 为五位置最高 —— 效率与薪资的错位最明显。</div>
+      <div class="chart" id="chart-pos-ws" style="height:360px"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="chart-title"><span class="dot" style="background:var(--blue)"></span>各位置 · 球员散点（横轴年薪，纵轴 WinScore/48）</div>
+    <div class="chart-sub">左上象限=高薪低效（警惕区），右下象限=低薪高效（价值区）。点击图例可切换位置。</div>
+    <div class="chart" id="chart-pos-scatter" style="height:440px"></div>
+  </div>
+</section>
+
+<!-- ============ 发现 5：顶薪错位 ============ -->
+<section class="block container" id="max">
+  <div class="sec-head">
+    <div class="sec-num">06</div>
+    <div>
+      <h2>发现六：顶薪错位是结构性现象 —— 25 人豪掷，仅少数“值得”</h2>
+      <div class="sub">25 名顶薪球员（年薪 &gt; 4,000 万）薪资均值是全样本的 <b>3.5 倍</b>，效率中位数仅为 <b>1.3 倍</b>（14.09 vs 10.85）。<b>红点=顶薪球员，灰色参考线=全样本效率中位数与前 25% 分位。</b></div>
+    </div>
+  </div>
+  <div class="split">
+    <div class="card">
+      <div class="chart-title"><span class="dot" style="background:var(--red)"></span>年薪 vs WinScore/48 —— 顶薪球员的“性价比检验”</div>
+      <div class="chart-sub">标注了代表球员；悬停可查看全部球员。Jokic（29.23）是唯一“贵但值”的顶薪球员。</div>
+      <div class="chart" id="chart-max" style="height:460px"></div>
+    </div>
+    <div>
+      <div class="insight" style="min-height:300px">
+        <div class="i-title"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>核心洞察</div>
+        <p>顶薪球员中，仅 <b>13/25（52%）</b> 效率进入全联盟前 25%；<b>18/25（72%）</b> 薪资高于模型预测 50% 以上，<b>无一被低估</b>（t=4.22, p&lt;0.001）。</p>
+        <p><span style="color:var(--orange)">Nikola Jokic</span> 是例外：29.23 的 WinScore/48 + 5,142 万合同，“贵但值”。<span style="color:var(--red)">Rudy Gobert</span>（+231%）是模型局限案例 —— 防守型中锋的贡献难以被统计捕捉。</p>
+        <div class="stat-grid">
+          <div class="stat red"><div class="s-v">13/25</div><div class="s-l">效率进前 25% 的顶薪</div></div>
+          <div class="stat orange"><div class="s-v">72%</div><div class="s-l">薪资高于预测 50%+</div></div>
+          <div class="stat green"><div class="s-v">0</div><div class="s-l">被低估的顶薪球员</div></div>
+          <div class="stat blue"><div class="s-v">3.5×</div><div class="s-l">薪资 / 效率倍数比</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 结论建议 ============ -->
+<section class="block container" id="concl">
+  <div class="sec-head">
+    <div class="sec-num">07</div>
+    <div>
+      <h2>结论与管理建议</h2>
+      <div class="sub">对球队管理层与数据爱好者：把预算花在“单位效率”上，而不是“数据总量”上。</div>
+    </div>
+  </div>
+  <div class="concl-grid">
+    <div class="concl">
+      <div class="c-num">01</div>
+      <div class="c-ic ic-orange"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
+      <h3>挖潜新秀合同期即战力</h3>
+      <p>新秀合同让球员薪资折价约 59%。球探部门应重点扫描新秀合同期内已兑现即战力的球员（如 Yabusele、Trent 式案例），这是性价比最高的补强路径。</p>
+    </div>
+    <div class="concl">
+      <div class="c-num">02</div>
+      <div class="c-ic ic-green"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+      <h3>顶薪以单位效率为锚</h3>
+      <p>顶薪签约前对照 WinScore/48 与前 25% 分位线。警惕“数据总量”型合同 —— 25 名顶薪中 72% 薪资高于模型预测 50% 以上，无一被低估。</p>
+    </div>
+    <div class="concl">
+      <div class="c-ic ic-blue"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>
+      <h3>关注被低估的位置</h3>
+      <p>中锋单位时间效率五位置最高、薪资居中游；分卫薪资最低。市场对“防守型中锋”与“高效角色球员”存在定价缺口，是结构性套利机会。</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <span>© 2026 NBA 薪资效率洞察 · 基于 Task 7 数据分析报告 · 合成数据以报告统计量为锚，仅作演示</span>
+    <a class="gh" id="ghLink" href="#" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+      查看 GitHub 源码
+    </a>
+  </div>
+</footer>
+
+<button id="toTop" aria-label="返回顶部"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+
+<script>
+/* ================= 数据处理与全局状态 ================= */
+const DATA = (window.NBA_DATA || []).map(d => ({
+  ...d,
+  isMax: d.Salary_M > 40,
+  isCore: d.MP >= 20,
+  isRookie: d.rookie === 1,
+  lnSal: Math.log(d.Salary_M),
+}));
+const POS_ORDER = ['PG', 'SG', 'SF', 'PF', 'C'];
+const COLOR = {
+  orange: '#ff8a3d', orange2: '#f97316', blue: '#38bdf8', green: '#34d399',
+  red: '#f87171', amber: '#fbbf24', purple: '#a78bfa',
+  grid: 'rgba(147,167,196,.14)', text: '#e7eefb', sub: '#93a7c4',
+};
+const POS_COLOR = { PG: '#38bdf8', SG: '#a78bfa', SF: '#34d399', PF: '#fbbf24', C: '#f87171' };
+
+const state = { pos: 'ALL', type: 'ALL' };
+
+function filtered() {
+  let arr = DATA;
+  if (state.pos !== 'ALL') arr = arr.filter(d => d.Pos === state.pos);
+  if (state.type === 'MAX') arr = arr.filter(d => d.isMax);
+  else if (state.type === 'ROOKIE') arr = arr.filter(d => d.isRookie);
+  else if (state.type === 'CORE') arr = arr.filter(d => d.isCore);
+  return arr;
+}
+
+const fmtMoney = v => v >= 100 ? v.toFixed(0) : v.toFixed(1);
+const fmtPct = v => (v >= 0 ? '+' : '') + v.toFixed(0) + '%';
+
+function baseLayout(extra) {
+  return Object.assign({
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { family: 'Inter,"PingFang SC","Microsoft YaHei",sans-serif', color: COLOR.text, size: 12 },
+    margin: { l: 62, r: 22, t: 34, b: 50 },
+    hovermode: 'closest',
+    xaxis: { gridcolor: COLOR.grid, zerolinecolor: COLOR.grid, tickfont: { color: COLOR.sub } },
+    yaxis: { gridcolor: COLOR.grid, zerolinecolor: COLOR.grid, tickfont: { color: COLOR.sub } },
+  }, extra || {});
+}
+const baseConfig = {
+  responsive: true,
+  displaylogo: false,
+  modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d'],
+  toImageButtonOptions: { format: 'png', filename: 'nba-dashboard', scale: 2 },
+};
+
+/* ================= 图 1：薪资分布直方图 ================= */
+function drawDist(data) {
+  if (!data.length) return;
+  const sals = data.map(d => d.Salary_M);
+  const maxD = data.filter(d => d.isMax);
+  const nonMax = data.filter(d => !d.isMax);
+  const median = sals.slice().sort((a, b) => a - b)[Math.floor(sals.length / 2)];
+  const mean = sals.reduce((a, b) => a + b, 0) / sals.length;
+  document.getElementById('curMed').textContent = median.toFixed(1);
+  document.getElementById('curCount').textContent = data.length;
+
+  const traces = [
+    {
+      type: 'histogram', x: nonMax.map(d => d.Salary_M), nbinsx: 32,
+      marker: { color: COLOR.blue, line: { color: '#0a0f1e', width: 1 } },
+      opacity: 0.88, name: '常规薪资',
+      hovertemplate: '年薪区间<br>球员数：%{y}<extra></extra>',
+    },
+    {
+      type: 'histogram', x: maxD.map(d => d.Salary_M),
+      marker: { color: COLOR.red, line: { color: '#0a0f1e', width: 1 } },
+      opacity: 0.92, name: '顶薪（>40M）',
+      hovertemplate: '年薪区间<br>球员数：%{y}<extra></extra>',
+    },
+    {
+      type: 'scatter', mode: 'lines', x: [median, median], y: [0, data.length * 0.16],
+      line: { color: COLOR.orange, width: 2.4, dash: 'dash' }, name: '中位数',
+      hoverinfo: 'skip',
+    },
+    {
+      type: 'scatter', mode: 'lines', x: [mean, mean], y: [0, data.length * 0.16],
+      line: { color: '#e7eefb', width: 2.2, dash: 'dot' }, name: '均值',
+      hoverinfo: 'skip',
+    },
+  ];
+  const layout = baseLayout({
+    barmode: 'overlay',
+    xaxis: { title: '年薪（百万美元）', gridcolor: COLOR.grid },
+    yaxis: { title: '球员人数', gridcolor: COLOR.grid },
+    showlegend: true,
+    legend: { orientation: 'h', y: 1.12, x: 0, bgcolor: 'rgba(0,0,0,0)' },
+  });
+  Plotly.react('chart-dist', traces, layout, baseConfig);
+}
+
+/* ================= 图 2：相关热力图 ================= */
+function corrMat(rows, keys) {
+  const n = keys.length, m = [];
+  for (let i = 0; i < n; i++) {
+    m.push([]);
+    for (let j = 0; j < n; j++) {
+      const a = rows.map(r => r[keys[i]]), b = rows.map(r => r[keys[j]]);
+      const ma = a.reduce((s, v) => s + v, 0) / a.length, mb = b.reduce((s, v) => s + v, 0) / b.length;
+      let num = 0, da = 0, db = 0;
+      for (let k = 0; k < a.length; k++) {
+        num += (a[k] - ma) * (b[k] - mb);
+        da += (a[k] - ma) ** 2; db += (b[k] - mb) ** 2;
+      }
+      m[i].push(da * db > 0 ? num / Math.sqrt(da * db) : 0);
+    }
+  }
+  return m;
+}
+
+function drawCorr(data) {
+  const keys = ['lnSal', 'EFF', 'MP', 'PTS_36', 'WinScore_48', 'TS_pct', 'Age'];
+  const labels = ['ln(薪资)', 'EFF', '上场时间', 'PTS/36', 'WinScore/48', 'TS%', '年龄'];
+  const z = corrMat(data, keys);
+  const trace = {
+    type: 'heatmap', z, x: labels, y: labels,
+    zmin: -1, zmax: 1,
+    colorscale: [[0, '#1d4ed8'], [0.5, '#0f172a'], [1, '#f97316']],
+    hoverongaps: false,
+    text: z.map(r => r.map(v => v.toFixed(2))),
+    texttemplate: '%{text}',
+    hovertemplate: '%{y} × %{x}<br>r = %{z:.3f}<extra></extra>',
+    colorbar: { title: { text: 'r' }, thickness: 12, tickfont: { color: COLOR.sub } },
+  };
+  const layout = baseLayout({
+    xaxis: { ticks: '', side: 'bottom', showgrid: false },
+    yaxis: { ticks: '', autorange: 'reversed', showgrid: false },
+  });
+  Plotly.react('chart-corr', [trace], layout, baseConfig);
+}
+
+/* ================= 图 3：新秀红利散点 ================= */
+function linFit(xs, ys) {
+  const n = xs.length;
+  const mx = xs.reduce((s, v) => s + v, 0) / n, my = ys.reduce((s, v) => s + v, 0) / n;
+  let num = 0, den = 0;
+  for (let i = 0; i < n; i++) { num += (xs[i] - mx) * (ys[i] - my); den += (xs[i] - mx) ** 2; }
+  const b = den ? num / den : 0, a = my - b * mx;
+  return { a, b };
+}
+
+function drawRookie(data) {
+  const rook = data.filter(d => d.isRookie);
+  const vet = data.filter(d => !d.isRookie);
+  const mk = (arr, color, name) => ({
+    type: 'scatter', mode: 'markers', x: arr.map(d => d.PTS_36), y: arr.map(d => d.lnSal),
+    marker: { color, size: 8, opacity: .75, line: { color: '#0a0f1e', width: .6 } },
+    name,
+    customdata: arr.map(d => [d.Player, d.Pos, d.Salary_M, d.WinScore_48]),
+    hovertemplate: '<b>%{customdata[0]}</b> (%{customdata[1]})<br>' +
+      'PTS/36：%{x:.1f}<br>ln(年薪)：%{y:.2f}（%{customdata[2]}M$）<br>WS/48：%{customdata[3]}<extra></extra>',
+  });
+  const addLine = (arr, color, name) => {
+    if (arr.length < 3) return null;
+    const f = linFit(arr.map(d => d.PTS_36), arr.map(d => d.lnSal));
+    const x0 = Math.min(...arr.map(d => d.PTS_36)), x1 = Math.max(...arr.map(d => d.PTS_36));
+    return {
+      type: 'scatter', mode: 'lines', x: [x0, x1], y: [f.a + f.b * x0, f.a + f.b * x1],
+      line: { color, width: 2.6, dash: 'solid' }, name,
+      hoverinfo: 'skip',
+    };
+  };
+  const traces = [mk(rook, COLOR.amber, '疑似新秀合同'), mk(vet, COLOR.blue, '非新秀'),
+    addLine(rook, COLOR.amber, '新秀拟合'), addLine(vet, COLOR.blue, '非新秀拟合')].filter(Boolean);
+  const layout = baseLayout({
+    xaxis: { title: '每 36 分钟得分（PTS/36）' },
+    yaxis: { title: 'ln(年薪，百万美元)' },
+    showlegend: true,
+    legend: { orientation: 'h', y: 1.12, x: 0, bgcolor: 'rgba(0,0,0,0)' },
+  });
+  Plotly.react('chart-rookie', traces, layout, baseConfig);
+}
+
+/* ================= 图 4：性价比榜单 ================= */
+function drawValue(data) {
+  const core = data.filter(d => d.isCore && d.dev_pct != null);
+  if (!core.length) { Plotly.react('chart-value', [], baseLayout({}), baseConfig); return; }
+  const under = core.slice().sort((a, b) => a.dev_pct - b.dev_pct).slice(0, 8);
+  const over = core.slice().sort((a, b) => b.dev_pct - a.dev_pct).slice(0, 8);
+  const rows = [...under, ...over];
+  const mk = (arr, color) => ({
+    type: 'bar', orientation: 'h',
+    x: arr.map(d => d.dev_pct), y: arr.map(d => d.Player),
+    marker: { color, line: { color: '#0a0f1e', width: .6 } },
+    customdata: arr.map(d => [d.Salary_M, d.PTS_36, d.WinScore_48, d.Pos]),
+    hovertemplate: '<b>%{y}</b> (%{customdata[3]})<br>偏离度：%{x:.0f}%<br>年薪：%{customdata[0]}M$<br>PTS/36：%{customdata[1]} · WS/48：%{customdata[2]}<extra></extra>',
+  });
+  const traces = [mk(under, COLOR.green), mk(over, COLOR.red)];
+  const layout = baseLayout({
+    barmode: 'relative',
+    xaxis: { title: '薪资偏离市场模型（%）', zerolinecolor: '#5f7595' },
+    yaxis: { autorange: 'reversed', tickfont: { size: 12 } },
+    showlegend: false,
+    margin: { l: 168, r: 22, t: 12, b: 50 },
+    shapes: [{ type: 'line', x0: 0, x1: 0, y0: -0.5, y1: rows.length - 0.5, line: { color: '#5f7595', width: 1.2, dash: 'dash' } }],
+  });
+  Plotly.react('chart-value', traces, layout, baseConfig);
+}
+
+/* ================= 图 5：位置对比 ================= */
+function drawPosBoxes(data) {
+  const mk = (metric, title, unit) => ({
+    type: 'box',
+    x: data.filter(d => POS_ORDER.includes(d.Pos)).map(d => d.Pos),
+    y: data.filter(d => POS_ORDER.includes(d.Pos)).map(d => d[metric]),
+    boxpoints: 'all', jitter: .35, pointpos: 0,
+    fillcolor: 'rgba(56,189,248,.12)', line: { color: COLOR.blue, width: 1.6 },
+    marker: { size: 4.5, opacity: .5, color: COLOR.blue },
+    name: title,
+    hovertemplate: '%{y}<extra></extra>',
+  });
+  const l1 = baseLayout({
+    yaxis: { title: '年薪（百万美元）' },
+    showlegend: false,
+    boxmode: 'group',
+    hovermode: 'closest',
+    margin: { l: 62, r: 18, t: 30, b: 46 },
+  });
+  Plotly.react('chart-pos-sal', [mk('Salary_M')], l1, baseConfig);
+
+  const l2 = baseLayout({
+    yaxis: { title: 'WinScore/48' },
+    showlegend: false,
+    boxmode: 'group',
+    hovermode: 'closest',
+    margin: { l: 62, r: 18, t: 30, b: 46 },
+  });
+  Plotly.react('chart-pos-ws', [mk('WinScore_48')], l2, baseConfig);
+}
+
+function drawPosScatter(data) {
+  const traces = POS_ORDER.map(p => {
+    const arr = data.filter(d => d.Pos === p);
+    return {
+      type: 'scatter', mode: 'markers',
+      x: arr.map(d => d.Salary_M), y: arr.map(d => d.WinScore_48),
+      name: p,
+      marker: { color: POS_COLOR[p], size: 8, opacity: .72, line: { color: '#0a0f1e', width: .6 } },
+      customdata: arr.map(d => [d.Player, d.PTS_36, d.Salary_M]),
+      hovertemplate: '<b>%{customdata[0]}</b> (%{x}M$)<br>WS/48：%{y:.2f} · PTS/36：%{customdata[1]}<extra></extra>',
+    };
+  });
+  const layout = baseLayout({
+    xaxis: { title: '年薪（百万美元）' },
+    yaxis: { title: 'WinScore/48' },
+    showlegend: true,
+    legend: { orientation: 'h', y: 1.12, x: 0, bgcolor: 'rgba(0,0,0,0)' },
+  });
+  Plotly.react('chart-pos-scatter', traces, layout, baseConfig);
+}
+
+/* ================= 图 6：顶薪错位 ================= */
+function drawMax(data) {
+  const sal = data.map(d => d.Salary_M).sort((a, b) => a - b);
+  const ws = data.map(d => d.WinScore_48).sort((a, b) => a - b);
+  const medWs = ws[Math.floor(ws.length / 2)];
+  const p75 = ws[Math.floor(ws.length * .75)];
+  const nonMax = data.filter(d => !d.isMax);
+  const maxP = data.filter(d => d.isMax).sort((a, b) => b.dev_pct - a.dev_pct);
+  const anno = ['Nikola Jokic', 'Ben Simmons', 'Rudy Gobert', 'Stephen Curry', 'Bradley Beal', 'Fred VanVleet', 'Guerschon Yabusele'];
+  const text = maxP.map(d => anno.includes(d.Player) ? d.Player : '');
+  const textpos = maxP.map(d => anno.includes(d.Player) ? (d.WinScore_48 > 20 ? 'top center' : 'bottom center') : 'none');
+
+  const traces = [
+    {
+      type: 'scatter', mode: 'markers', x: nonMax.map(d => d.Salary_M), y: nonMax.map(d => d.WinScore_48),
+      name: '常规球员', marker: { color: 'rgba(147,167,196,.45)', size: 6.5, line: { color: '#0a0f1e', width: .5 } },
+      customdata: nonMax.map(d => [d.Player, d.Pos, d.dev_pct]),
+      hovertemplate: '<b>%{customdata[0]}</b> (%{customdata[1]})<br>年薪：%{x}M$<br>WS/48：%{y:.2f} · vs市场：%{customdata[2]}<extra></extra>',
+    },
+    {
+      type: 'scatter', mode: 'markers', x: maxP.map(d => d.Salary_M), y: maxP.map(d => d.WinScore_48),
+      name: '顶薪球员（>40M）', text, textposition: textpos,
+      textfont: { size: 11, color: '#e7eefb' },
+      marker: { color: COLOR.red, size: 11, opacity: .9, line: { color: '#fff', width: 1 } },
+      customdata: maxP.map(d => [d.Player, d.Pos, d.dev_pct]),
+      hovertemplate: '<b>%{customdata[0]}</b> (%{customdata[1]})<br>年薪：%{x}M$<br>WS/48：%{y:.2f} · vs市场：%{customdata[2]}<extra></extra>',
+    },
+    {
+      type: 'scatter', mode: 'lines', x: [0, 62], y: [medWs, medWs],
+      line: { color: COLOR.sub, width: 1.4, dash: 'dash' }, name: '全样本WS/48中位数', hoverinfo: 'skip',
+    },
+    {
+      type: 'scatter', mode: 'lines', x: [0, 62], y: [p75, p75],
+      line: { color: COLOR.green, width: 1.6, dash: 'dot' }, name: '前25%分位', hoverinfo: 'skip',
+    },
+  ];
+  const layout = baseLayout({
+    xaxis: { title: '年薪（百万美元）', range: [0, 62] },
+    yaxis: { title: 'WinScore/48', range: [0, 34] },
+    showlegend: true,
+    legend: { orientation: 'h', y: 1.12, x: 0, bgcolor: 'rgba(0,0,0,0)' },
+    annotations: [
+      { x: 60, y: medWs, text: '中位数', showarrow: false, xanchor: 'right', yanchor: 'bottom', font: { size: 11, color: COLOR.sub } },
+      { x: 60, y: p75, text: '前25%', showarrow: false, xanchor: 'right', yanchor: 'bottom', font: { size: 11, color: COLOR.green } },
+    ],
+  });
+  Plotly.react('chart-max', traces, layout, baseConfig);
+}
+
+/* ================= 明细表 ================= */
+const tableCols = [
+  { k: 'Player', l: '球员', num: false, fmt: v => v },
+  { k: 'Pos', l: '位置', num: false, fmt: v => v },
+  { k: 'Age', l: '年龄', num: true, fmt: v => v },
+  { k: 'Salary_M', l: '年薪(M$)', num: true, fmt: v => v.toFixed(1) },
+  { k: 'PTS_36', l: 'PTS/36', num: true, fmt: v => v.toFixed(1) },
+  { k: 'TS_pct', l: 'TS%', num: true, fmt: v => (v * 100).toFixed(1) + '%' },
+  { k: 'EFF', l: 'EFF', num: true, fmt: v => v.toFixed(1) },
+  { k: 'WinScore_48', l: 'WS/48', num: true, fmt: v => v.toFixed(2) },
+  { k: 'MP', l: 'MP', num: true, fmt: v => v.toFixed(1) },
+  { k: 'rookie', l: '新秀合同', num: false, fmt: v => v === 1 ? '是' : '否' },
+  { k: 'dev_pct', l: 'vs市场', num: true, fmt: v => v == null ? '—' : fmtPct(v) },
+];
+let sort = { k: 'Salary_M', dir: -1 };
+let query = '';
+
+function drawTable(data) {
+  let arr = data.filter(d => (d.Player || '').toLowerCase().includes(query.toLowerCase()));
+  arr = arr.slice().sort((a, b) => {
+    const av = a[sort.k], bv = b[sort.k];
+    if (av == null) return 1; if (bv == null) return -1;
+    const r = (typeof av === 'string' ? av.localeCompare(bv) : av - bv);
+    return r * sort.dir;
+  });
+  document.getElementById('tableCount').textContent = arr.length;
+
+  const thead = document.querySelector('#playerTable thead tr');
+  thead.innerHTML = tableCols.map(c =>
+    `<th data-k="${c.k}" class="${c.num ? '' : 'l'}">${c.l}${sort.k === c.k ? `<span class="arr">${sort.dir === 1 ? ' ▲' : ' ▼'}</span>` : ''}</th>`).join('');
+
+  const tbody = document.querySelector('#playerTable tbody');
+  tbody.innerHTML = arr.map(d => {
+    const devCls = d.dev_pct == null ? 'dev-0' : d.dev_pct >= 0 ? 'dev-pos' : 'dev-neg';
+    return '<tr>' + tableCols.map(c => {
+      const cls = c.num ? '' : 'l';
+      if (c.k === 'Player') return `<td class="l"><span class="pname">${d.Player}</span><span class="pos-tag ${d.Pos}">${d.Pos}</span></td>`;
+      if (c.k === 'rookie') return `<td class="${d.rookie === 1 ? 'rook-y' : 'rook-n'}">${d.rookie === 1 ? '● 是' : '○ 否'}</td>`;
+      if (c.k === 'dev_pct') return `<td class="${devCls}">${c.fmt(d[c.k])}</td>`;
+      return `<td class="${cls}">${c.fmt(d[c.k])}</td>`;
+    }).join('') + '</tr>';
+  }).join('');
+
+  document.querySelectorAll('#playerTable thead th').forEach(th => {
+    th.onclick = () => {
+      const k = th.dataset.k;
+      sort = sort.k === k ? { k, dir: -sort.dir } : { k, dir: sort.k === 'Salary_M' ? -1 : 1 };
+      drawTable(filtered());
+    };
+  });
+}
+
+/* ================= 联动更新 ================= */
+function updateAll() {
+  const data = filtered();
+  drawDist(data);
+  drawCorr(data);
+  drawRookie(data);
+  drawValue(data);
+  drawPosBoxes(data);
+  drawPosScatter(data);
+  drawMax(data);
+  drawTable(data);
+}
+
+/* ================= 事件绑定 ================= */
+document.querySelectorAll('#filterBar .chip[data-pos]').forEach(b => {
+  b.onclick = () => {
+    state.pos = b.dataset.pos;
+    document.querySelectorAll('#filterBar .chip[data-pos]').forEach(x => x.classList.toggle('on', x === b));
+    updateAll();
+  };
+});
+document.querySelectorAll('#filterBar .chip[data-type]').forEach(b => {
+  b.onclick = () => {
+    state.type = b.dataset.type;
+    document.querySelectorAll('#filterBar .chip[data-type]').forEach(x => x.classList.toggle('on', x === b));
+    updateAll();
+  };
+});
+document.getElementById('tableSearch').addEventListener('input', e => { query = e.target.value; drawTable(filtered()); });
+
+/* 导航高亮 + 返回顶部 */
+const navLinks = document.querySelectorAll('#navLinks a');
+const secs = [...navLinks].map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+const io = new IntersectionObserver(entries => {
+  entries.forEach(en => {
+    if (en.isIntersecting) {
+      navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + en.target.id));
+    }
+  });
+}, { rootMargin: '-40% 0px -55% 0px' });
+secs.forEach(s => io.observe(s));
+
+const toTop = document.getElementById('toTop');
+window.addEventListener('scroll', () => toTop.classList.toggle('show', window.scrollY > 600));
+toTop.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+
+/* GitHub 链接自动填充（部署后） */
+const gh = document.getElementById('ghLink');
+try {
+  const page = new URL(window.location.href);
+  if (page.hostname.includes('github.io')) {
+    const [u, repo] = page.hostname.split('.')[0].length ? [page.hostname.split('.')[0], page.pathname.split('/')[1]] : ['', ''];
+    gh.href = `https://github.com/${u}/${repo}`;
+    gh.textContent = '查看 GitHub 源码（' + u + '/' + repo + '）';
+  }
+} catch (e) { /* ignore */ }
+
+/* ================= 初始化 ================= */
+window.addEventListener('DOMContentLoaded', () => updateAll());
+if (document.readyState !== 'loading') updateAll();
+</script>
+</body>
+</html>
